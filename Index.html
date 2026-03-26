@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>80er-Expertenquiz 🎹</title>
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-blue: #00ffff;
+            --dark-bg: #050510;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--dark-bg);
+            background-image: linear-gradient(to bottom, #050510 0%, #1a0b2e 100%);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .quiz-container {
+            background: rgba(22, 33, 62, 0.9);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 0 30px var(--neon-blue);
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            border: 3px solid var(--neon-pink);
+            position: relative;
+        }
+        h1 { color: var(--neon-blue); text-transform: uppercase; text-shadow: 0 0 10px var(--neon-blue); }
+        #timer-container { width: 100%; height: 10px; background: #111; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+        #timer-bar { height: 100%; width: 100%; background: var(--neon-pink); transition: width 1s linear; }
+        .question { font-size: 1.3rem; margin-bottom: 25px; min-height: 60px; }
+        .options { display: grid; gap: 12px; }
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            padding: 15px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+        .btn:hover { background: var(--neon-blue); color: black; box-shadow: 0 0 15px var(--neon-blue); }
+        .hidden { display: none; }
+        #score-display { font-size: 2rem; color: var(--neon-pink); }
+    </style>
+</head>
+<body>
+
+<div class="quiz-container">
+    <h1 id="title">80s Radio Quiz</h1>
+    <div id="quiz-content">
+        <div id="timer-container"><div id="timer-bar"></div></div>
+        <p id="question-info" style="color: gray;">Frage 1 von 5</p>
+        <div id="question" class="question">Bereit?</div>
+        <div id="options" class="options">
+            <button class="btn" onclick="startQuiz()">QUIZ STARTEN</button>
+        </div>
+    </div>
+    <div id="result-screen" class="hidden">
+        <h2>MISSION BEENDET</h2>
+        <p id="score-display"></p>
+        <button class="btn" onclick="location.reload()">NEUSTART</button>
+    </div>
+</div>
+
+<script>
+    const originalData = [
+        { q: "Zu welchem Interpreten gehört der Song \"Shout\"?", t: 10, opts: ["Tears for Fears", "Simple Minds", "A Flock of Seagulls"], correct: "Tears for Fears" },
+        { q: "Wer veröffentlichte den Song \"Running Up That Hill\"?", t: 10, opts: ["Kate Bush", "Annie Lennox", "Belinda Carlisle"], correct: "Kate Bush" },
+        { q: "Von wem stammt der Titel \"Take On Me\"?", t: 10, opts: ["a-ha", "Duran Duran", "Spandau Ballet"], correct: "a-ha" },
+        { q: "Welcher Künstler steht hinter dem Song \"In the Air Tonight\"?", t: 10, opts: ["Phil Collins", "Peter Gabriel", "Sting"], correct: "Phil Collins" },
+        { q: "Wer ist der Interpret von \"With or Without You\"?", t: 10, opts: ["U2", "The Police", "R.E.M."], correct: "U2" }
+    ];
+
+    let questions = [];
+    let currentIdx = 0;
+    let score = 0;
+    let timerInterval;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(freq, type, duration) {
+        try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        } catch(e) {}
+    }
+
+    // Hilfsfunktion zum Mischen von Arrays
+    function shuffle(array) {
+        return array.sort(() => Math.random() - 0.5);
+    }
+
+    function startQuiz() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        // Fragen mischen
+        questions = shuffle([...originalData]);
+        // Antworten innerhalb der Fragen mischen
+        questions.forEach(item => item.opts = shuffle([...item.opts]));
+        
+        showQuestion();
+    }
+
+    function showQuestion() {
+        clearInterval(timerInterval);
+        const qData = questions[currentIdx];
+        document.getElementById('question-info').innerText = `Frage ${currentIdx + 1} von ${questions.length}`;
+        document.getElementById('question').innerText = qData.q;
+        const optionsDiv = document.getElementById('options');
+        optionsDiv.innerHTML = '';
+        
+        qData.opts.forEach(opt => {
+            const b = document.createElement('button');
+            b.innerText = opt;
+            b.className = 'btn';
+            b.onclick = () => checkAnswer(opt);
+            optionsDiv.appendChild(b);
+        });
+
+        let timeLeft = qData.t;
+        const bar = document.getElementById('timer-bar');
+        bar.style.width = "100%";
+        
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            bar.style.width = (timeLeft / qData.t * 100) + "%";
+            if(timeLeft <= 0) {
+                playSound(150, 'sawtooth', 0.5);
+                nextQuestion();
+            }
+        }, 1000);
+    }
+
+    function checkAnswer(selected) {
+        if(selected === questions[currentIdx].correct) {
+            score++;
+            playSound(880, 'sine', 0.3);
+        } else {
+            playSound(150, 'sawtooth', 0.5);
+        }
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        currentIdx++;
+        if(currentIdx < questions.length) {
+            showQuestion();
+        } else {
+            endQuiz();
+        }
+    }
+
+    function endQuiz() {
+        clearInterval(timerInterval);
+        document.getElementById('quiz-content').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        document.getElementById('score-display').innerText = `${score} / ${questions.length} PKT`;
+    }
+</script>
+</body>
+</html>
